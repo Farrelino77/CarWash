@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technician Dashboard - Car Service Management</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        body {
+            background-color: #f0f2f5;
+        }
+
+        .container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background-color: #3D50DF;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background-color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background-color: #3D50DF;
+            color: white;
+        }
+
+        .service-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .service-card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .service-type {
+            font-weight: bold;
+            color: #3D50DF;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+
+        .status-pending {
+            background-color: #FEF3C7;
+            color: #D97706;
+        }
+
+        .status-progress {
+            background-color: #DBEAFE;
+            color: #2563EB;
+        }
+
+        .status-completed {
+            background-color: #D1FAE5;
+            color: #059669;
+        }
+
+        .service-details {
+            margin-bottom: 15px;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn-start {
+            background-color: #3D50DF;
+            color: white;
+        }
+
+        .btn-complete {
+            background-color: #34D399;
+            color: white;
+        }
+
+        .btn:disabled {
+            background-color: #E5E7EB;
+            color: #9CA3AF;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .service-list {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+            
+            .tabs {
+                flex-wrap: wrap;
+            }
+            
+            .tab {
+                flex: 1;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Service Dashboard</h1>
+            <div class="user-info">
+                <div class="user-avatar">T</div>
+                <span>Teknisi</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="filterServices('all')">All Services</div>
+            <div class="tab" onclick="filterServices('pending')">Pending</div>
+            <div class="tab" onclick="filterServices('progress')">In Progress</div>
+            <div class="tab" onclick="filterServices('completed')">Completed</div>
+        </div>
+
+        <div class="service-list" id="serviceList">
+            <!-- Services will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        console.log("Initializing dashboard...");
+
+        const supabaseUrl = 'https://uuiikeqvjbawyucywtci.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV1aWlrZXF2amJhd3l1Y3l3dGNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzMzNjk4MzAsImV4cCI6MjA0ODk0NTgzMH0.PPpeLGV747BF5c9aPiOVL-2GhDcNizwFB8O41ma_yJY';
+
+        const _supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        let services = [];
+
+        async function initSupabase() {
+            try {
+                console.log("Initializing Supabase...");
+                const { data: { session }, error } = await _supabase.auth.getSession();
+                
+                if (!session) {
+                    const { data, error: signInError } = await _supabase.auth.signInAnonymously();
+                    if (signInError) throw signInError;
+                }
+                
+                console.log("Authentication successful");
+                await fetchServices();
+            } catch (error) {
+                console.error('Auth error:', error.message);
+            }
+        }
+
+        async function fetchServices() {
+            try {
+                console.log('Fetching services...');
+                const { data, error } = await _supabase
+                    .from('orders')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (error) throw error;
+
+                console.log('Fetched data:', data);
+                services = data || [];
+                renderServices(services);
+            } catch (error) {
+                console.error('Error fetching services:', error.message);
+            }
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleString('id-ID', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function renderServices(servicesToRender) {
+            const container = document.getElementById('serviceList');
+            container.innerHTML = '';
+
+            if (!servicesToRender || servicesToRender.length === 0) {
+                container.innerHTML = '<p style="text-align: center; padding: 20px;">No services found</p>';
+                return;
+            }
+
+            servicesToRender.forEach(service => {
+                const card = document.createElement('div');
+                card.className = 'service-card';
+                card.innerHTML = `
+                    <div class="service-header">
+                        <span class="service-type">${service.service_type}</span>
+                        <span class="status-badge status-${service.status}">
+                            ${service.status.charAt(0).toUpperCase() + service.status.slice(1)}
+                        </span>
+                    </div>
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <span>Customer:</span>
+                            <span>${service.customer_name}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Car Type:</span>
+                            <span>${service.car_type}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Police Number:</span>
+                            <span>${service.police_number}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Location:</span>
+                            <span>${service.location}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span>Appointment:</span>
+                            <span>${formatDate(service.appointment_date)}</span>
+                        </div>
+                    </div>
+                    <div class="action-buttons">
+                        <button 
+                            class="btn btn-start" 
+                            onclick="updateStatus('${service.id}', 'progress')"
+                            ${service.status !== 'pending' ? 'disabled' : ''}
+                        >
+                            Start Service
+                        </button>
+                        <button 
+                            class="btn btn-complete" 
+                            onclick="updateStatus('${service.id}', 'completed')"
+                            ${service.status !== 'progress' ? 'disabled' : ''}
+                        >
+                            Complete
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function updateStatus(serviceId, newStatus) {
+            try {
+                console.log(`Updating status for ${serviceId} to ${newStatus}`);
+                const { error } = await _supabase
+                    .from('orders')
+                    .update({ status: newStatus })
+                    .eq('id', serviceId);
+
+                if (error) throw error;
+                console.log('Status updated successfully');
+                await fetchServices();
+            } catch (error) {
+                console.error('Error updating status:', error.message);
+            }
+        }
+
+        function filterServices(status) {
+            console.log('Filtering services:', status);
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if (status === 'all') {
+                renderServices(services);
+            } else {
+                const filtered = services.filter(service => service.status === status);
+                renderServices(filtered);
+            }
+        }
+
+        // Subscribe to real-time updates
+        _supabase
+            .channel('orders')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+                fetchServices();
+            })
+            .subscribe();
+
+        // Initialize on page load
+        window.onload = function() {
+            initSupabase();
+        };
+    </script>
+</body>
+</html>
